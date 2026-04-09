@@ -1,21 +1,10 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000,
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function sendDailySummary({ toEmail, toName, count }) {
-  await transporter.sendMail({
-    from: `"Metrowest Shipping" <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: 'Metrowest Shipping <onboarding@resend.dev>',
     to: toEmail,
     subject: `You have ${count} new mail item${count !== 1 ? 's' : ''} today`,
     text: `Hi ${toName},
@@ -24,7 +13,7 @@ Here's your mail summary for today:
 
 Total mail received: ${count}
 
-To view your uploaded mails, click the digitalmailbox-production.up.railway.app 
+To view your uploaded mails, visit your mailbox portal.
 Thank you for using our service. If you have any questions, feel free to reach out.
 
 Best regards,
@@ -41,7 +30,7 @@ Metrowest Shipping Team`,
             <p style="margin: 0; font-size: 13px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Total Mail Received</p>
             <p style="margin: 6px 0 0; font-size: 36px; font-weight: bold; color: #2563eb;">${count}</p>
           </div>
-          <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">To view your uploaded mails, click the digitalmailbox-production.up.railway.app .</p>
+          <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">To view your uploaded mails, visit your mailbox portal.</p>
           <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">Thank you for using our service. If you have any questions, feel free to reach out.</p>
           <p style="margin: 0; color: #6b7280; font-size: 14px;">Best regards,<br><strong style="color: #1f2937;">Metrowest Shipping Team</strong></p>
         </div>
