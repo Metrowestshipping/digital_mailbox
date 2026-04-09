@@ -326,16 +326,21 @@ router.post('/send-reminders', requireAdmin, async (req, res) => {
     byCustomer[id].count++;
   }
 
-  // Send one email per customer
+  // Send one email per customer (with per-email timeout)
   const results = [];
   for (const { customer, count } of Object.values(byCustomer)) {
     if (!customer?.email) continue;
     try {
-      await sendDailySummary({
-        toEmail: customer.email,
-        toName: customer.full_name || customer.email,
-        count,
-      });
+      await Promise.race([
+        sendDailySummary({
+          toEmail: customer.email,
+          toName: customer.full_name || customer.email,
+          count,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Email timed out after 20s')), 20000)
+        ),
+      ]);
       results.push({ email: customer.email, count, ok: true });
     } catch (err) {
       results.push({ email: customer.email, count, ok: false, error: err.message });
