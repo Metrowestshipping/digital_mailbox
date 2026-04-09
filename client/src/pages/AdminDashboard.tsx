@@ -2,9 +2,10 @@ import { useEffect, useState, useRef } from 'react';
 import { format } from 'date-fns';
 import {
   LogOut, Mail, RefreshCw, Plus, Upload, Check, Trash2,
-  Send, ChevronDown, X, Images, Pencil,
+  Send, ChevronDown, X, Images, Pencil, BellRing,
 } from 'lucide-react';
 import { mailApi, uploadApi, usersApi } from '../lib/api';
+import { pdfToImage } from '../lib/pdfToImage';
 import type { MailItem, Profile } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { Timeline } from '../components/Timeline';
@@ -24,6 +25,7 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Profile | null>(null);
+  const [sendingReminders, setSendingReminders] = useState(false);
 
   async function loadItems() {
     setLoading(true);
@@ -49,9 +51,33 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
     setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
   }
 
+  function handleDelete(id: string) {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+  }
+
   function handleBulkCreated(newItems: MailItem[]) {
     setItems((prev) => [...newItems, ...prev]);
     setShowUploadModal(false);
+  }
+
+  async function handleSendReminders() {
+    setSendingReminders(true);
+    try {
+      const result = await mailApi.sendReminders();
+      if (result.total === 0) {
+        alert('No mail was uploaded today, so no emails were sent.');
+      } else if (result.sent === 0) {
+        const failures = result.results.filter((r) => !r.ok);
+        const detail = failures.map((r) => `${r.email}: ${(r as any).error ?? 'unknown error'}`).join('\n');
+        alert(`Found mail for ${result.total} customer(s) but failed to send emails.\n\n${detail}`);
+      } else {
+        alert(`Reminder emails sent to ${result.sent} customer${result.sent !== 1 ? 's' : ''}.`);
+      }
+    } catch (e: any) {
+      alert(e?.response?.data?.error ?? 'Failed to send reminders. Check your Gmail App Password in server/.env');
+    } finally {
+      setSendingReminders(false);
+    }
   }
 
   const pending = items.filter((i) =>
@@ -78,6 +104,15 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             <span className="text-sm text-gray-600 hidden md:block truncate max-w-32">{profile.full_name || profile.email}</span>
+            <button
+              onClick={handleSendReminders}
+              disabled={sendingReminders}
+              className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-green-600 text-white text-xs sm:text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
+              title="Send daily reminder emails"
+            >
+              <BellRing size={14} />
+              <span className="hidden sm:inline">{sendingReminders ? 'Sending…' : 'Send Reminders'}</span>
+            </button>
             <button
               onClick={() => setShowUploadModal(true)}
               className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-blue-600 text-white text-xs sm:text-sm rounded-lg hover:bg-blue-700 transition-colors"
@@ -129,7 +164,7 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
         ) : (
           <div className="space-y-3 sm:space-y-4">
             {displayed.map((item) => (
-              <AdminMailRow key={item.id} item={item} onUpdate={handleUpdate} />
+              <AdminMailRow key={item.id} item={item} onUpdate={handleUpdate} onDelete={handleDelete} />
             ))}
           </div>
         )}
@@ -166,13 +201,25 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
 
 // ---- Admin Mail Row ----
 
-function AdminMailRow({ item, onUpdate }: { item: MailItem; onUpdate: (u: MailItem) => void }) {
+function AdminMailRow({ item, onUpdate, onDelete }: { item: MailItem; onUpdate: (u: MailItem) => void; onDelete: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
   const [trackingNum, setTrackingNum] = useState('');
   const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleDelete() {
+    if (!window.confirm('Permanently delete this mail item? This cannot be undone and will also remove it from the customer\'s view.')) return;
+    setLoading('delete');
+    try {
+      await mailApi.delete(item.id);
+      onDelete(item.id);
+    } catch (e: any) {
+      alert(e?.response?.data?.error ?? 'Failed to delete');
+      setLoading(null);
+    }
+  }
 
   async function completeAction(action: string, extra?: object) {
     setLoading(action);
@@ -232,12 +279,22 @@ function AdminMailRow({ item, onUpdate }: { item: MailItem; onUpdate: (u: MailIt
                 <StatusBadge status={item.status} action={item.action} />
               </div>
             </div>
-            <button
-              onClick={() => setExpanded((e) => !e)}
-              className="text-gray-400 hover:text-gray-600 mt-0.5 p-1 flex-shrink-0"
-            >
-              <ChevronDown size={16} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-            </button>
+            <div className="flex items-center gap-0.5 flex-shrink-0">
+              <button
+                onClick={handleDelete}
+                disabled={loading === 'delete'}
+                className="text-gray-300 hover:text-red-500 disabled:opacity-40 p-1 rounded hover:bg-red-50 transition-colors"
+                title="Delete mail item"
+              >
+                <Trash2 size={14} />
+              </button>
+              <button
+                onClick={() => setExpanded((e) => !e)}
+                className="text-gray-400 hover:text-gray-600 mt-0.5 p-1 flex-shrink-0"
+              >
+                <ChevronDown size={16} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+              </button>
+            </div>
           </div>
 
           {/* Admin action area */}
@@ -346,18 +403,38 @@ function BulkUploadModal({
 }) {
   const [customerId, setCustomerId] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
-    setFiles(selected);
+    if (!selected.length) return;
+    setConverting(true);
+    setError('');
+    try {
+      const converted: File[] = [];
+      const urls: string[] = [];
+      for (const file of selected) {
+        const imageFile = file.type === 'application/pdf' ? await pdfToImage(file) : file;
+        converted.push(imageFile);
+        urls.push(URL.createObjectURL(imageFile));
+      }
+      setFiles(converted);
+      setPreviews(urls);
+    } catch {
+      setError('Failed to process one or more files. Please try again.');
+    } finally {
+      setConverting(false);
+    }
   }
 
   function removeFile(index: number) {
     setFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviews((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -413,12 +490,12 @@ function BulkUploadModal({
           <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
             <Images size={24} className="text-gray-400 mb-1" />
             <span className="text-sm text-gray-500">
-              {files.length ? `${files.length} image(s) selected` : 'Click to select images'}
+              {converting ? 'Processing…' : files.length ? `${files.length} image(s) ready` : 'Click to select images'}
             </span>
             <span className="text-xs text-gray-400 mt-0.5">Hold Ctrl/Cmd to select multiple</span>
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,.pdf"
               multiple
               required
               className="hidden"
@@ -428,12 +505,15 @@ function BulkUploadModal({
         </div>
 
         {/* Preview grid */}
-        {files.length > 0 && (
+        {converting && (
+          <p className="text-xs text-blue-600 text-center py-2">Converting PDF to image…</p>
+        )}
+        {previews.length > 0 && (
           <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-40 overflow-y-auto">
-            {files.map((file, i) => (
+            {previews.map((src, i) => (
               <div key={i} className="relative group">
                 <img
-                  src={URL.createObjectURL(file)}
+                  src={src}
                   alt={`Mail ${i + 1}`}
                   className="w-full h-16 object-cover rounded-md border border-gray-200"
                 />
@@ -478,10 +558,10 @@ function BulkUploadModal({
           </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || converting}
             className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-60"
           >
-            {loading
+            {converting ? 'Processing…' : loading
               ? `Uploading ${progress}%…`
               : `Add ${files.length > 1 ? `${files.length} Items` : 'Mail'}`}
           </button>

@@ -57,7 +57,7 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
         <div className="flex gap-3 p-3 sm:p-4">
           {/* Thumbnail */}
-          <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 rounded-lg overflow-hidden">
+          <div className="flex-shrink-0 w-32 h-16 sm:w-48 sm:h-24 bg-gray-100 rounded-lg overflow-hidden">
             {!imgError ? (
               <img
                 src={item.image_url}

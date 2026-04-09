@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin, supabase } from '../middleware/auth.js';
+import { sendDailySummary } from '../lib/mailer.js';
 
 const router = Router();
 
@@ -214,6 +215,25 @@ router.patch('/:id/complete', requireAdmin, async (req, res) => {
   res.json(data);
 });
 
+// DELETE /api/mail/:id — admin permanently deletes a mail item
+router.delete('/:id', requireAdmin, async (req, res) => {
+  const { data: existing } = await supabase
+    .from('mail_items')
+    .select('id')
+    .eq('id', req.params.id)
+    .single();
+
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  const { error } = await supabase
+    .from('mail_items')
+    .delete()
+    .eq('id', req.params.id);
+
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // PATCH /api/mail/:id/archive — archive a completed mail item
 router.patch('/:id/archive', requireAuth, async (req, res) => {
   const isAdmin = req.user.profile?.role === 'admin';
@@ -243,6 +263,52 @@ router.patch('/:id/archive', requireAuth, async (req, res) => {
   });
 
   res.json(data);
+});
+
+// POST /api/mail/send-reminders — admin sends daily summary emails to all customers who got mail today
+router.post('/send-reminders', requireAdmin, async (req, res) => {
+  // Get today's date range in UTC
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  // Fetch all mail items received today with customer info
+  const { data: todaysMail, error } = await supabase
+    .from('mail_items')
+    .select('customer_id, customer:profiles!mail_items_customer_id_fkey(id, full_name, email)')
+    .gte('received_date', todayStart.toISOString())
+    .lte('received_date', todayEnd.toISOString());
+
+  if (error) return res.status(500).json({ error: error.message });
+  if (!todaysMail || !todaysMail.length) return res.json({ sent: 0, total: 0, results: [] });
+
+  // Group by customer
+  const byCustomer = {};
+  for (const item of todaysMail) {
+    const id = item.customer_id;
+    if (!byCustomer[id]) byCustomer[id] = { customer: item.customer, count: 0 };
+    byCustomer[id].count++;
+  }
+
+  // Send one email per customer
+  const results = [];
+  for (const { customer, count } of Object.values(byCustomer)) {
+    if (!customer?.email) continue;
+    try {
+      await sendDailySummary({
+        toEmail: customer.email,
+        toName: customer.full_name || customer.email,
+        count,
+      });
+      results.push({ email: customer.email, count, ok: true });
+    } catch (err) {
+      results.push({ email: customer.email, count, ok: false, error: err.message });
+    }
+  }
+
+  const sent = results.filter((r) => r.ok).length;
+  res.json({ sent, total: results.length, results });
 });
 
 export default router;
