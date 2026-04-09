@@ -19,8 +19,7 @@ Here's your mail summary for today:
 
 Total mail received: ${count}
 
-To view your uploaded files, click the https://yourstore.com/user/dashboard. 
-
+To view your uploaded mails, click the digitalmailbox-production.up.railway.app 
 Thank you for using our service. If you have any questions, feel free to reach out.
 
 Best regards,
@@ -37,6 +36,7 @@ Metrowest Shipping Team`,
             <p style="margin: 0; font-size: 13px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Total Mail Received</p>
             <p style="margin: 6px 0 0; font-size: 36px; font-weight: bold; color: #2563eb;">${count}</p>
           </div>
+          <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">To view your uploaded mails, click the digitalmailbox-production.up.railway.app .</p>
           <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">Thank you for using our service. If you have any questions, feel free to reach out.</p>
           <p style="margin: 0; color: #6b7280; font-size: 14px;">Best regards,<br><strong style="color: #1f2937;">Metrowest Shipping Team</strong></p>
         </div>
