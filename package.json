@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
     "build": "npm run build --workspace=client",
+    "start": "node server/index.js",
     "install:all": "npm install && npm install --workspace=client && npm install --workspace=server"
   },
   "devDependencies": {
