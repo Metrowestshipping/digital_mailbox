@@ -54,7 +54,7 @@ export function CustomerInbox({ profile, onSignOut }: Props) {
               <Mail size={16} className="text-white" />
             </div>
             <div>
-              <span className="font-semibold text-gray-900 text-sm">Digital Mailbox</span>
+              <span className="font-semibold text-gray-900 text-sm">Metrowest Digital Mailbox</span>
               {profile.box_number && (
                 <span className="ml-2 text-xs text-gray-500">Box #{profile.box_number}</span>
               )}

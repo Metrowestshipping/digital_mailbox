@@ -1,6 +1,32 @@
 import { Router } from 'express';
+import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { requireAuth, requireAdmin, supabase } from '../middleware/auth.js';
 import { sendDailySummary } from '../lib/mailer.js';
+
+const s3 = new S3Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+const BUCKET = process.env.S3_BUCKET;
+
+function s3KeyFromUrl(url) {
+  // URL format: https://<bucket>.s3.<region>.amazonaws.com/<key>
+  try {
+    const { pathname } = new URL(url);
+    return pathname.slice(1); // strip leading /
+  } catch {
+    return null;
+  }
+}
+
+async function deleteFromS3(url) {
+  const key = s3KeyFromUrl(url);
+  if (!key) return;
+  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+}
 
 const router = Router();
 
@@ -219,7 +245,7 @@ router.patch('/:id/complete', requireAdmin, async (req, res) => {
 router.delete('/:id', requireAdmin, async (req, res) => {
   const { data: existing } = await supabase
     .from('mail_items')
-    .select('id')
+    .select('id, image_url, scan_files')
     .eq('id', req.params.id)
     .single();
 
@@ -231,6 +257,15 @@ router.delete('/:id', requireAdmin, async (req, res) => {
     .eq('id', req.params.id);
 
   if (error) return res.status(500).json({ error: error.message });
+
+  // Delete files from S3 (best effort — don't fail the request if S3 errors)
+  const filesToDelete = [
+    existing.image_url,
+    ...(Array.isArray(existing.scan_files) ? existing.scan_files : []),
+  ].filter(Boolean);
+
+  await Promise.allSettled(filesToDelete.map(deleteFromS3));
+
   res.json({ success: true });
 });
 
