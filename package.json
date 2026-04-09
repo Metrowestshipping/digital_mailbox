@@ -2,12 +2,11 @@
   "name": "digital-mailbox",
   "version": "1.0.0",
   "private": true,
-  "workspaces": ["client", "server"],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
-    "build": "npm run build --workspace=client",
+    "dev": "concurrently \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "build": "npm --prefix client install && npm --prefix client run build",
     "start": "node server/index.js",
-    "install:all": "npm install && npm install --workspace=client && npm install --workspace=server"
+    "install:all": "npm install && npm --prefix client install && npm --prefix server install"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
