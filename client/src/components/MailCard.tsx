@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import {
-  ScanLine, Send, Trash2, Archive, ChevronDown, ChevronUp,
+  ScanLine, Trash2, Archive, ChevronDown, ChevronUp,
   Eye, Package, FileText, CheckCircle,
 } from 'lucide-react';
 import { mailApi } from '../lib/api';
@@ -129,13 +129,13 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
                       loading={loading === 'shred_requested'}
                       color="red"
                     />
-                    <ActionButton
+                    {/* <ActionButton
                       label="Forward"
                       icon={<Send size={13} />}
                       onClick={() => handleAction('forward_requested')}
                       loading={loading === 'forward_requested'}
                       color="indigo"
-                    />
+                    /> */}
                   </>
                 )}
 
