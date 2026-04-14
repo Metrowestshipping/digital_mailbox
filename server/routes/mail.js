@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { requireAuth, requireAdmin, supabase } from '../middleware/auth.js';
-import { sendDailySummary } from '../lib/mailer.js';
+import { sendDailySMS } from '../lib/sms.js';
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
@@ -301,7 +301,7 @@ router.patch('/:id/archive', requireAuth, async (req, res) => {
 });
 
 // POST /api/mail/send-reminders — admin sends daily summary emails to all customers who got mail today
-router.post('/send-reminders', requireAdmin, async (req, res) => {
+router.post('/send-reminders', requireAdmin, async (_req, res) => {
   // Get today's date range in UTC
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -311,7 +311,7 @@ router.post('/send-reminders', requireAdmin, async (req, res) => {
   // Fetch all mail items received today with customer info
   const { data: todaysMail, error } = await supabase
     .from('mail_items')
-    .select('customer_id, customer:profiles!mail_items_customer_id_fkey(id, full_name, email)')
+    .select('customer_id, customer:profiles!mail_items_customer_id_fkey(id, full_name, phone)')
     .gte('received_date', todayStart.toISOString())
     .lte('received_date', todayEnd.toISOString());
 
@@ -326,24 +326,19 @@ router.post('/send-reminders', requireAdmin, async (req, res) => {
     byCustomer[id].count++;
   }
 
-  // Send one email per customer (with per-email timeout)
+  // Send one SMS per customer
   const results = [];
   for (const { customer, count } of Object.values(byCustomer)) {
-    if (!customer?.email) continue;
+    if (!customer?.phone) continue;
     try {
-      await Promise.race([
-        sendDailySummary({
-          toEmail: customer.email,
-          toName: customer.full_name || customer.email,
-          count,
-        }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Email timed out after 20s')), 20000)
-        ),
-      ]);
-      results.push({ email: customer.email, count, ok: true });
+      await sendDailySMS({
+        toPhone: customer.phone,
+        toName: customer.full_name || 'Customer',
+        count,
+      });
+      results.push({ phone: customer.phone, count, ok: true });
     } catch (err) {
-      results.push({ email: customer.email, count, ok: false, error: err.message });
+      results.push({ phone: customer.phone, count, ok: false, error: err.message });
     }
   }
 

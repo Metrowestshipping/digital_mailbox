@@ -39,6 +39,7 @@ export interface Profile {
   email: string;
   full_name: string;
   box_number: string;
+  phone: string;
   role: Role;
   created_at: string;
 }
@@ -83,7 +84,7 @@ export const mailApi = {
     api.post<MailItem[]>('/mail/bulk', payload).then((r) => r.data),
 
   sendReminders: () =>
-    api.post<{ sent: number; total: number; results: { email: string; count: number; ok: boolean }[] }>('/mail/send-reminders').then((r) => r.data),
+    api.post<{ sent: number; total: number; results: { phone: string; count: number; ok: boolean; error?: string }[] }>('/mail/send-reminders').then((r) => r.data),
 
   requestAction: (id: string, action: string) =>
     api.patch<MailItem>(`/mail/${id}/request-action`, { action }).then((r) => r.data),
@@ -131,10 +132,10 @@ export const usersApi = {
   list: () =>
     api.get<Profile[]>('/users').then((r) => r.data),
 
-  create: (payload: { email: string; password: string; full_name: string; box_number?: string }) =>
+  create: (payload: { email: string; password: string; full_name: string; box_number?: string; phone?: string }) =>
     api.post<Profile>('/users', payload).then((r) => r.data),
 
-  update: (id: string, payload: { full_name?: string; box_number?: string }) =>
+  update: (id: string, payload: { full_name?: string; box_number?: string; phone?: string }) =>
     api.patch<Profile>(`/users/${id}`, payload).then((r) => r.data),
 
   delete: (id: string) =>

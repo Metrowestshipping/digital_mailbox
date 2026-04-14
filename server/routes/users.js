@@ -4,10 +4,10 @@ import { requireAdmin, supabase } from '../middleware/auth.js';
 const router = Router();
 
 // GET /api/users — admin gets all customers
-router.get('/', requireAdmin, async (req, res) => {
+router.get('/', requireAdmin, async (_req, res) => {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, email, box_number, role, created_at')
+    .select('id, full_name, email, box_number, phone, role, created_at')
     .eq('role', 'customer')
     .order('full_name');
 
@@ -17,7 +17,7 @@ router.get('/', requireAdmin, async (req, res) => {
 
 // POST /api/users — admin creates a customer account
 router.post('/', requireAdmin, async (req, res) => {
-  const { email, password, full_name, box_number } = req.body;
+  const { email, password, full_name, box_number, phone } = req.body;
   if (!email || !password || !full_name) {
     return res.status(400).json({ error: 'email, password, and full_name are required' });
   }
@@ -34,7 +34,7 @@ router.post('/', requireAdmin, async (req, res) => {
   // Profile is created by DB trigger; update with extra fields
   const { data, error } = await supabase
     .from('profiles')
-    .update({ full_name, box_number, role: 'customer' })
+    .update({ full_name, box_number, phone, role: 'customer' })
     .eq('id', authData.user.id)
     .select().single();
 
@@ -44,11 +44,11 @@ router.post('/', requireAdmin, async (req, res) => {
 
 // PATCH /api/users/:id — admin updates a customer
 router.patch('/:id', requireAdmin, async (req, res) => {
-  const { full_name, box_number } = req.body;
+  const { full_name, box_number, phone } = req.body;
 
   const { data, error } = await supabase
     .from('profiles')
-    .update({ full_name, box_number })
+    .update({ full_name, box_number, phone })
     .eq('id', req.params.id)
     .select().single();
 

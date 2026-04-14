@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { format } from 'date-fns';
 import {
   LogOut, Mail, RefreshCw, Plus, Upload, Check, Trash2,
-  Send, ChevronDown, X, Images, Pencil, BellRing,
+  Send, ChevronDown, X, Images, Pencil, MessageSquare,
 } from 'lucide-react';
 import { mailApi, uploadApi, usersApi } from '../lib/api';
 import { pdfToImage } from '../lib/pdfToImage';
@@ -65,16 +65,16 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
     try {
       const result = await mailApi.sendReminders();
       if (result.total === 0) {
-        alert('No mail was uploaded today, so no emails were sent.');
+        alert('No mail was uploaded today, so no texts were sent.');
       } else if (result.sent === 0) {
         const failures = result.results.filter((r) => !r.ok);
-        const detail = failures.map((r) => `${r.email}: ${(r as any).error ?? 'unknown error'}`).join('\n');
-        alert(`Found mail for ${result.total} customer(s) but failed to send emails.\n\n${detail}`);
+        const detail = failures.map((r) => `${r.phone}: ${r.error ?? 'unknown error'}`).join('\n');
+        alert(`Found mail for ${result.total} customer(s) but failed to send texts.\n\n${detail}`);
       } else {
-        alert(`Reminder emails sent to ${result.sent} customer${result.sent !== 1 ? 's' : ''}.`);
+        alert(`Reminder texts sent to ${result.sent} customer${result.sent !== 1 ? 's' : ''}.`);
       }
     } catch (e: any) {
-      alert(e?.response?.data?.error ?? 'Failed to send reminders. Check your Gmail App Password in server/.env');
+      alert(e?.response?.data?.error ?? 'Failed to send reminders. Check Twilio credentials in Railway.');
     } finally {
       setSendingReminders(false);
     }
@@ -108,10 +108,10 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
               onClick={handleSendReminders}
               disabled={sendingReminders}
               className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-green-600 text-white text-xs sm:text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
-              title="Send daily reminder emails"
+              title="Send daily reminder texts"
             >
-              <BellRing size={14} />
-              <span className="hidden sm:inline">{sendingReminders ? 'Sending…' : 'Send Reminders'}</span>
+              <MessageSquare size={14} />
+              <span className="hidden sm:inline">{sendingReminders ? 'Sending…' : 'Send Texts'}</span>
             </button>
             <button
               onClick={() => setShowUploadModal(true)}
@@ -580,7 +580,7 @@ function AddCustomerModal({
   onClose: () => void;
   onCreated: (profile: Profile) => void;
 }) {
-  const [form, setForm] = useState({ email: '', password: '', full_name: '', box_number: '' });
+  const [form, setForm] = useState({ email: '', password: '', full_name: '', box_number: '', phone: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -612,6 +612,7 @@ function AddCustomerModal({
           { label: 'Email', key: 'email' as const, type: 'email', required: true },
           { label: 'Password', key: 'password' as const, type: 'password', required: true },
           { label: 'Box Number', key: 'box_number' as const, type: 'text', required: false },
+          { label: 'Phone (with country code, e.g. +14155551234)', key: 'phone' as const, type: 'tel', required: false },
         ].map(({ label, key, type, required }) => (
           <div key={key}>
             <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
@@ -682,7 +683,7 @@ function CustomersTab({ customers, onAdd, onEdit, onDelete }: {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  {['Name', 'Email', 'Box #', 'Joined', ''].map((h) => (
+                  {['Name', 'Email', 'Phone', 'Box #', 'Joined', ''].map((h) => (
                     <th key={h} className="text-left px-4 py-2.5 text-xs font-semibold text-gray-500">{h}</th>
                   ))}
                 </tr>
@@ -692,6 +693,7 @@ function CustomersTab({ customers, onAdd, onEdit, onDelete }: {
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-800">{c.full_name || '—'}</td>
                     <td className="px-4 py-3 text-gray-600">{c.email}</td>
+                    <td className="px-4 py-3 text-gray-600">{c.phone || '—'}</td>
                     <td className="px-4 py-3 text-gray-600">{c.box_number || '—'}</td>
                     <td className="px-4 py-3 text-gray-500">{format(new Date(c.created_at), 'MMM d, yyyy')}</td>
                     <td className="px-4 py-3">
@@ -726,6 +728,7 @@ function CustomersTab({ customers, onAdd, onEdit, onDelete }: {
                 <div className="min-w-0">
                   <p className="font-medium text-gray-800 text-sm">{c.full_name || '—'}</p>
                   <p className="text-xs text-gray-500 mt-0.5 truncate">{c.email}</p>
+                  {c.phone && <p className="text-xs text-gray-500 mt-0.5">{c.phone}</p>}
                   <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
                     {c.box_number && <span>Box #{c.box_number}</span>}
                     <span>{format(new Date(c.created_at), 'MMM d, yyyy')}</span>
@@ -768,7 +771,7 @@ function EditCustomerModal({
   onClose: () => void;
   onSaved: (updated: Profile) => void;
 }) {
-  const [form, setForm] = useState({ full_name: customer.full_name || '', box_number: customer.box_number || '' });
+  const [form, setForm] = useState({ full_name: customer.full_name || '', box_number: customer.box_number || '', phone: customer.phone || '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -808,6 +811,15 @@ function EditCustomerModal({
             type="text"
             value={form.box_number}
             onChange={(e) => setForm((f) => ({ ...f, box_number: e.target.value }))}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Phone (with country code, e.g. +14155551234)</label>
+          <input
+            type="tel"
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
