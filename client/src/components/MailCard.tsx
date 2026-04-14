@@ -123,19 +123,19 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
                       color="blue"
                     />
                     <ActionButton
-                      label="Forward"
-                      icon={<Send size={13} />}
-                      onClick={() => handleAction('forward_requested')}
-                      loading={loading === 'forward_requested'}
-                      color="indigo"
-                    />
-                    <ActionButton
                       label="Shred"
                       icon={<Trash2 size={13} />}
                       onClick={() => handleAction('shred_requested')}
                       loading={loading === 'shred_requested'}
                       color="red"
                     />
+                    {/* <ActionButton
+                      label="Forward"
+                      icon={<Send size={13} />}
+                      onClick={() => handleAction('forward_requested')}
+                      loading={loading === 'forward_requested'}
+                      color="indigo"
+                    /> */}
                   </>
                 )}
 
