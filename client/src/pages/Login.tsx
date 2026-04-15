@@ -8,39 +8,18 @@ interface Props {
 
 const DISCLAIMER_TEXT = `Virtual Mailbox Action Disclaimer
 
-By selecting and submitting any action request (including, but not limited to, Open & Scan, Discard, or Shred) for a mail item, you ("Customer") acknowledge and agree to the following terms:
+By selecting and submitting any action request (including but not limited to Open & Scan, Discard, or Shred) for a mail item, the customer acknowledges and agrees to the following:
 
-1. Finality of Actions
-All submitted and processed action requests are final and irreversible. Once an action has been completed by our team, it cannot be modified, reversed, or canceled.
-
-2. No Recovery or Retrieval
-We are not responsible for retrieving, reversing, or recovering any mail item after the requested action has been processed.
-
-3. Destruction of Mail Items
-If a Discard or Shred request is selected and processed:
-The mail item will be permanently destroyed
-No copies, backups, or recovery options will be available
-
-4. Digital Storage and Deletion
-All mail items stored in the system will be:
-Automatically deleted after 30 days, or
-At the end of the monthly renewal cycle (1st of each month),
-whichever occurs first.
-Once deleted, mail items cannot be recovered digitally.
-
-5. Physical Mail Retention
-If a mail item is automatically deleted from the system without a Discard or Shred request, the physical mail piece may still be available for pickup, subject to in-store holding policies.
-
-6. Customer Responsibility
-The Customer is solely responsible for:
-Verifying that the correct action is selected before submission
-Managing mail items within the applicable storage and retention periods
-
-7. Recommended Action
-Customers are strongly encouraged to retrieve their mail before the end of each monthly cycle to maintain accurate and complete records.
+Once an action has been processed by our team, the request is final and irreversible.
+We cannot retrieve, reverse, or recover any mail item after the requested action has been completed.
+If a Discard or Shred request is selected and processed, the mail item will be permanently destroyed, and no copies or recovery will be available.
+All mail items stored in the system will be automatically deleted after 30 days or at the end of the monthly renewal cycle (renewal date: the 1st of each month) as a safety precaution. Once deleted from the system, items cannot be recovered digitally.
+If a mail item is automatically deleted from the system without a Discard or Shred request, the physical mail piece may still be available for pickup at the store location, subject to our in-store holding policies.
+Customers are strongly encouraged to pick up their mail before the end of each month (prior to the new renewal cycle) to maintain a clear and organized record of incoming mail for each billing period.
+It is the customer’s responsibility to verify that the selected action is correct and to manage their mail items within the allowed storage period.
+By proceeding with any action, you confirm your understanding and acceptance of this policy.
 
 Acknowledgment
-
 By proceeding with any action request, you confirm that you have read, understood, and agreed to this disclaimer.`;
 
 export function Login({ onSignIn }: Props) {
