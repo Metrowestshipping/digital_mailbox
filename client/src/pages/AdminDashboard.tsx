@@ -27,6 +27,7 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Profile | null>(null);
   const [sendingReminders, setSendingReminders] = useState(false);
+  const [sendPreview, setSendPreview] = useState<{ name: string; box: string; count: number }[] | null>(null);
 
   async function loadItems() {
     setLoading(true);
@@ -61,17 +62,36 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
     setShowUploadModal(false);
   }
 
-  async function handleSendReminders() {
+  function handleSendTextsClick() {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD in ET
+    const grouped = new Map<string, { name: string; box: string; count: number }>();
+    for (const item of items) {
+      const itemDate = new Date(item.received_date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      if (itemDate !== today) continue;
+      if (!item.customer) continue;
+      const key = item.customer_id;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          name: item.customer.full_name || item.customer.email || 'Unknown',
+          box: item.customer.box_number || '',
+          count: 0,
+        });
+      }
+      grouped.get(key)!.count++;
+    }
+    setSendPreview(Array.from(grouped.values()));
+  }
+
+  async function handleConfirmSendReminders() {
+    setSendPreview(null);
     setSendingReminders(true);
     try {
       const result = await mailApi.sendReminders();
-      if (result.total === 0) {
-        alert('No mail was uploaded today, so no texts were sent.');
-      } else if (result.sent === 0) {
-        const failures = result.results.filter((r) => !r.ok);
-        const detail = failures.map((r) => `${r.phone}: ${r.error ?? 'unknown error'}`).join('\n');
+      if (result.sent === 0 && result.total > 0) {
+        const failures = result.results.filter((r: any) => !r.ok);
+        const detail = failures.map((r: any) => `${r.phone}: ${r.error ?? 'unknown error'}`).join('\n');
         alert(`Found mail for ${result.total} customer(s) but failed to send texts.\n\n${detail}`);
-      } else {
+      } else if (result.sent > 0) {
         alert(`Reminder texts sent to ${result.sent} customer${result.sent !== 1 ? 's' : ''}.`);
       }
     } catch (e: any) {
@@ -106,7 +126,7 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
           <div className="flex items-center gap-1 sm:gap-2">
             <span className="text-sm text-gray-600 hidden md:block truncate max-w-32">{profile.full_name || profile.email}</span>
             <button
-              onClick={handleSendReminders}
+              onClick={handleSendTextsClick}
               disabled={sendingReminders}
               className="flex items-center gap-1 px-2 sm:px-3 py-1.5 bg-green-600 text-white text-xs sm:text-sm rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
               title="Send daily reminder texts"
@@ -194,6 +214,14 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
             setCustomers((prev) => prev.map((c) => c.id === updated.id ? updated : c));
             setEditingCustomer(null);
           }}
+        />
+      )}
+
+      {sendPreview !== null && (
+        <SendTextPreviewModal
+          groups={sendPreview}
+          onConfirm={handleConfirmSendReminders}
+          onCancel={() => setSendPreview(null)}
         />
       )}
     </div>
@@ -898,6 +926,65 @@ function ImageLightbox({ url, onClose }: { url: string; onClose: () => void }) {
           alt="Mail preview"
           className="w-full max-h-[80vh] object-contain rounded-lg"
         />
+      </div>
+    </div>
+  );
+}
+
+// ---- Send Text Preview Modal ----
+
+function SendTextPreviewModal({
+  groups,
+  onConfirm,
+  onCancel,
+}: {
+  groups: { name: string; box: string; count: number }[];
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const hasGroups = groups.length > 0;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h3 className="text-base font-semibold text-gray-900 mb-2">Send Reminder Texts</h3>
+        {!hasGroups ? (
+          <p className="text-sm text-gray-600 mb-5">No mail was uploaded today — no texts will be sent.</p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600 mb-3">
+              {groups.length} customer{groups.length !== 1 ? 's' : ''} will receive a text:
+            </p>
+            <ul className="space-y-2 mb-5 max-h-52 overflow-y-auto">
+              {groups.map((g, i) => (
+                <li key={i} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
+                  <span className="text-gray-800 font-medium">
+                    {g.name}
+                    {g.box && <span className="text-gray-400 font-normal"> · #{g.box}</span>}
+                  </span>
+                  <span className="text-gray-500 text-xs ml-3 flex-shrink-0">
+                    {g.count} piece{g.count !== 1 ? 's' : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            {hasGroups ? 'Cancel' : 'Close'}
+          </button>
+          {hasGroups && (
+            <button
+              onClick={onConfirm}
+              className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Send {groups.length} Text{groups.length !== 1 ? 's' : ''}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
