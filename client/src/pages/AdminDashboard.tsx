@@ -172,6 +172,7 @@ export function AdminDashboard({ profile, onSignOut }: Props) {
         {tab === 'customers' ? (
           <CustomersTab
             customers={customers}
+            items={items}
             onAdd={() => setShowAddCustomer(true)}
             onEdit={(c) => setEditingCustomer(c)}
             onDelete={(id) => setCustomers((prev) => prev.filter((c) => c.id !== id))}
@@ -701,13 +702,24 @@ function AddCustomerModal({
 
 // ---- Customers Tab ----
 
-function CustomersTab({ customers, onAdd, onEdit, onDelete }: {
+function CustomersTab({ customers, items, onAdd, onEdit, onDelete }: {
   customers: Profile[];
+  items: MailItem[];
   onAdd: () => void;
   onEdit: (c: Profile) => void;
   onDelete: (id: string) => void;
 }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [sendingSmsId, setSendingSmsId] = useState<string | null>(null);
+
+  // Count today's mail (ET) per customer
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const todayCountById = new Map<string, number>();
+  for (const item of items) {
+    const itemDate = new Date(item.received_date).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    if (itemDate !== today) continue;
+    todayCountById.set(item.customer_id, (todayCountById.get(item.customer_id) ?? 0) + 1);
+  }
 
   async function handleDelete(customer: Profile) {
     if (!window.confirm(`Delete ${customer.full_name || customer.email}? This will permanently remove them and all their mail.`)) return;
@@ -719,6 +731,23 @@ function CustomersTab({ customers, onAdd, onEdit, onDelete }: {
       alert(e?.response?.data?.error ?? 'Failed to delete customer');
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleSendSms(customer: Profile) {
+    setSendingSmsId(customer.id);
+    try {
+      const result = await mailApi.sendReminders(customer.id);
+      if (result.sent > 0) {
+        alert(`Text sent to ${customer.full_name || customer.email}.`);
+      } else {
+        const err = result.results[0]?.error ?? 'Unknown error';
+        alert(`Failed to send text: ${err}`);
+      }
+    } catch (e: any) {
+      alert(e?.response?.data?.error ?? 'Failed to send text');
+    } finally {
+      setSendingSmsId(null);
     }
   }
 
@@ -748,70 +777,102 @@ function CustomersTab({ customers, onAdd, onEdit, onDelete }: {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {customers.map((c) => (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{c.full_name || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{c.email}</td>
-                    <td className="px-4 py-3 text-gray-600">{c.phone || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{c.box_number || '—'}</td>
-                    <td className="px-4 py-3 text-gray-500">{format(new Date(c.created_at), 'MMM d, yyyy')}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => onEdit(c)}
-                          className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-colors"
-                          title="Edit customer"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(c)}
-                          disabled={deletingId === c.id}
-                          className="text-gray-400 hover:text-red-600 disabled:opacity-40 p-1 rounded hover:bg-red-50 transition-colors"
-                          title="Delete customer"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {customers.map((c) => {
+                  const mailToday = todayCountById.get(c.id) ?? 0;
+                  return (
+                    <tr key={c.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 font-medium text-gray-800">{c.full_name || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600">{c.email}</td>
+                      <td className="px-4 py-3 text-gray-600">{c.phone || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600">{c.box_number || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500">{format(new Date(c.created_at), 'MMM d, yyyy')}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleSendSms(c)}
+                            disabled={mailToday === 0 || sendingSmsId === c.id || !c.phone}
+                            title={
+                              !c.phone ? 'No phone number' :
+                              mailToday === 0 ? 'No mail today' :
+                              `Send SMS — ${mailToday} piece${mailToday !== 1 ? 's' : ''} today`
+                            }
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-green-50 text-green-700 hover:bg-green-100 border-green-200"
+                          >
+                            <MessageSquare size={12} />
+                            {sendingSmsId === c.id ? 'Sending…' : mailToday > 0 ? `SMS (${mailToday})` : 'SMS'}
+                          </button>
+                          <button
+                            onClick={() => onEdit(c)}
+                            className="text-gray-400 hover:text-blue-600 p-1 rounded hover:bg-blue-50 transition-colors"
+                            title="Edit customer"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(c)}
+                            disabled={deletingId === c.id}
+                            className="text-gray-400 hover:text-red-600 disabled:opacity-40 p-1 rounded hover:bg-red-50 transition-colors"
+                            title="Delete customer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Mobile cards */}
           <div className="sm:hidden space-y-2">
-            {customers.map((c) => (
-              <div key={c.id} className="bg-white rounded-xl border border-gray-100 p-3 flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-800 text-sm">{c.full_name || '—'}</p>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">{c.email}</p>
-                  {c.phone && <p className="text-xs text-gray-500 mt-0.5">{c.phone}</p>}
-                  <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
-                    {c.box_number && <span>Box #{c.box_number}</span>}
-                    <span>{format(new Date(c.created_at), 'MMM d, yyyy')}</span>
+            {customers.map((c) => {
+              const mailToday = todayCountById.get(c.id) ?? 0;
+              return (
+                <div key={c.id} className="bg-white rounded-xl border border-gray-100 p-3 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-800 text-sm">{c.full_name || '—'}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">{c.email}</p>
+                    {c.phone && <p className="text-xs text-gray-500 mt-0.5">{c.phone}</p>}
+                    <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
+                      {c.box_number && <span>Box #{c.box_number}</span>}
+                      <span>{format(new Date(c.created_at), 'MMM d, yyyy')}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => handleSendSms(c)}
+                      disabled={mailToday === 0 || sendingSmsId === c.id || !c.phone}
+                      title={
+                        !c.phone ? 'No phone number' :
+                        mailToday === 0 ? 'No mail today' :
+                        `Send SMS — ${mailToday} piece${mailToday !== 1 ? 's' : ''} today`
+                      }
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-green-50 text-green-700 hover:bg-green-100 border-green-200"
+                    >
+                      <MessageSquare size={12} />
+                      {sendingSmsId === c.id ? '…' : mailToday > 0 ? `${mailToday}` : '0'}
+                    </button>
+                    <button
+                      onClick={() => onEdit(c)}
+                      className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-colors"
+                      title="Edit customer"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(c)}
+                      disabled={deletingId === c.id}
+                      className="text-gray-400 hover:text-red-600 disabled:opacity-40 p-1.5 rounded hover:bg-red-50 transition-colors"
+                      title="Delete customer"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button
-                    onClick={() => onEdit(c)}
-                    className="text-gray-400 hover:text-blue-600 p-1.5 rounded hover:bg-blue-50 transition-colors"
-                    title="Edit customer"
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(c)}
-                    disabled={deletingId === c.id}
-                    className="text-gray-400 hover:text-red-600 disabled:opacity-40 p-1.5 rounded hover:bg-red-50 transition-colors"
-                    title="Delete customer"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}

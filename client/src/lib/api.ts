@@ -83,8 +83,11 @@ export const mailApi = {
   bulkCreate: (payload: { customer_id: string; image_urls: string[]; notes?: string }) =>
     api.post<MailItem[]>('/mail/bulk', payload).then((r) => r.data),
 
-  sendReminders: () =>
-    api.post<{ sent: number; total: number; results: { phone: string; count: number; ok: boolean; error?: string }[] }>('/mail/send-reminders').then((r) => r.data),
+  sendReminders: (customerId?: string) =>
+    api.post<{ sent: number; total: number; results: { phone: string; count: number; ok: boolean; error?: string }[] }>(
+      '/mail/send-reminders',
+      customerId ? { customer_id: customerId } : {},
+    ).then((r) => r.data),
 
   requestAction: (id: string, action: string) =>
     api.patch<MailItem>(`/mail/${id}/request-action`, { action }).then((r) => r.data),

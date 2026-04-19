@@ -300,8 +300,10 @@ router.patch('/:id/archive', requireAuth, async (req, res) => {
   res.json(data);
 });
 
-// POST /api/mail/send-reminders — admin sends daily summary emails to all customers who got mail today
-router.post('/send-reminders', requireAdmin, async (_req, res) => {
+// POST /api/mail/send-reminders — admin sends daily summary SMS to customers who got mail today
+// Optional body: { customer_id } — if provided, sends only to that one customer
+router.post('/send-reminders', requireAdmin, async (req, res) => {
+  const { customer_id: filterCustomerId } = req.body ?? {};
   const now = new Date();
 
   // Compute today's date boundaries in Eastern time (America/New_York handles DST automatically).
@@ -315,12 +317,16 @@ router.post('/send-reminders', requireAdmin, async (_req, res) => {
   const todayStart = new Date(new Date(`${etToday}T00:00:00Z`).getTime() - etOffsetMs);
   const todayEnd   = new Date(new Date(`${etToday}T23:59:59.999Z`).getTime() - etOffsetMs);
 
-  // Fetch all mail items received today (Eastern time) with customer info
-  const { data: todaysMail, error } = await supabase
+  // Fetch mail items received today (Eastern time) with customer info
+  let mailQuery = supabase
     .from('mail_items')
     .select('customer_id, customer:profiles!mail_items_customer_id_fkey(id, full_name, phone)')
     .gte('received_date', todayStart.toISOString())
     .lte('received_date', todayEnd.toISOString());
+
+  if (filterCustomerId) mailQuery = mailQuery.eq('customer_id', filterCustomerId);
+
+  const { data: todaysMail, error } = await mailQuery;
 
   if (error) return res.status(500).json({ error: error.message });
   if (!todaysMail || !todaysMail.length) return res.json({ sent: 0, total: 0, results: [] });
