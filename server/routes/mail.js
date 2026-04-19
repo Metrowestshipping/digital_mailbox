@@ -302,13 +302,20 @@ router.patch('/:id/archive', requireAuth, async (req, res) => {
 
 // POST /api/mail/send-reminders — admin sends daily summary emails to all customers who got mail today
 router.post('/send-reminders', requireAdmin, async (_req, res) => {
-  // Get today's date range in UTC
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date();
-  todayEnd.setHours(23, 59, 59, 999);
+  const now = new Date();
 
-  // Fetch all mail items received today with customer info
+  // Compute today's date boundaries in Eastern time (America/New_York handles DST automatically).
+  // The Railway server runs in UTC, so setHours(0,0,0,0) would be UTC midnight — mail uploaded
+  // after ~8 PM ET would fall into the next UTC day and get double-counted the following day.
+  const etToday = now.toLocaleDateString('sv-SE', { timeZone: 'America/New_York' }); // 'YYYY-MM-DD'
+  // Derive the ET UTC offset at this moment (accounts for EST vs EDT)
+  const etNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const etOffsetMs = etNow.getTime() - now.getTime(); // e.g. -14400000 for EDT (UTC-4)
+
+  const todayStart = new Date(new Date(`${etToday}T00:00:00Z`).getTime() - etOffsetMs);
+  const todayEnd   = new Date(new Date(`${etToday}T23:59:59.999Z`).getTime() - etOffsetMs);
+
+  // Fetch all mail items received today (Eastern time) with customer info
   const { data: todaysMail, error } = await supabase
     .from('mail_items')
     .select('customer_id, customer:profiles!mail_items_customer_id_fkey(id, full_name, phone)')

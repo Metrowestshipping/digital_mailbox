@@ -2,13 +2,14 @@ import { useEffect, useState, useRef } from 'react';
 import { format } from 'date-fns';
 import {
   LogOut, Mail, RefreshCw, Plus, Upload, Check, Trash2,
-  Send, ChevronDown, X, Images, Pencil, MessageSquare,
+  Send, ChevronDown, X, Images, Pencil, MessageSquare, Eye, ExternalLink,
 } from 'lucide-react';
 import { mailApi, uploadApi, usersApi } from '../lib/api';
 import { pdfToImage } from '../lib/pdfToImage';
 import type { MailItem, Profile } from '../lib/api';
 import { StatusBadge } from '../components/StatusBadge';
 import { Timeline } from '../components/Timeline';
+import { FileViewer } from '../components/FileViewer';
 
 interface Props {
   profile: Profile;
@@ -207,6 +208,8 @@ function AdminMailRow({ item, onUpdate, onDelete }: { item: MailItem; onUpdate: 
   const [trackingNum, setTrackingNum] = useState('');
   const [scanFiles, setScanFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showScans, setShowScans] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleDelete() {
@@ -251,142 +254,170 @@ function AdminMailRow({ item, onUpdate, onDelete }: { item: MailItem; onUpdate: 
 
   const needsAction = item.status === 'pending_action' || item.status === 'processing';
   const isShredRequest = item.action === 'shred_requested' || item.action === 'shred_after_scan_requested';
+  const hasScanFiles = item.action === 'scan_completed' && (item.scan_files?.length ?? 0) > 0;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="flex items-start gap-3 p-3 sm:p-4">
-        <img
-          src={item.image_url}
-          alt="Mail"
-          className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg object-cover flex-shrink-0 border border-gray-100"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              {item.customer && (
-                <p className="text-sm font-medium text-gray-800 truncate">
-                  {item.customer.full_name}
-                  {item.customer.box_number && (
-                    <span className="text-gray-400 font-normal"> · #{item.customer.box_number}</span>
-                  )}
+    <>
+      {previewUrl && <ImageLightbox url={previewUrl} onClose={() => setPreviewUrl(null)} />}
+      {showScans && item.scan_files && <FileViewer files={item.scan_files} onClose={() => setShowScans(false)} />}
+
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="flex items-start gap-3 p-3 sm:p-4">
+          <button
+            type="button"
+            onClick={() => setPreviewUrl(item.image_url)}
+            className="relative flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden border border-gray-100 group focus:outline-none"
+            title="View full image"
+          >
+            <img
+              src={item.image_url}
+              alt="Mail"
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+              <Eye size={18} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                {item.customer && (
+                  <p className="text-sm font-medium text-gray-800 truncate">
+                    {item.customer.full_name}
+                    {item.customer.box_number && (
+                      <span className="text-gray-400 font-normal"> · #{item.customer.box_number}</span>
+                    )}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {format(new Date(item.received_date), 'MMM d, yyyy')}
                 </p>
-              )}
-              <p className="text-xs text-gray-500 mt-0.5">
-                {format(new Date(item.received_date), 'MMM d, yyyy')}
-              </p>
-              <div className="mt-1">
-                <StatusBadge status={item.status} action={item.action} />
+                <div className="mt-1">
+                  <StatusBadge status={item.status} action={item.action} />
+                </div>
+              </div>
+              <div className="flex items-center gap-0.5 flex-shrink-0">
+                <button
+                  onClick={handleDelete}
+                  disabled={loading === 'delete'}
+                  className="text-gray-300 hover:text-red-500 disabled:opacity-40 p-1 rounded hover:bg-red-50 transition-colors"
+                  title="Delete mail item"
+                >
+                  <Trash2 size={14} />
+                </button>
+                <button
+                  onClick={() => setExpanded((e) => !e)}
+                  className="text-gray-400 hover:text-gray-600 mt-0.5 p-1 flex-shrink-0"
+                >
+                  <ChevronDown size={16} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-0.5 flex-shrink-0">
-              <button
-                onClick={handleDelete}
-                disabled={loading === 'delete'}
-                className="text-gray-300 hover:text-red-500 disabled:opacity-40 p-1 rounded hover:bg-red-50 transition-colors"
-                title="Delete mail item"
-              >
-                <Trash2 size={14} />
-              </button>
-              <button
-                onClick={() => setExpanded((e) => !e)}
-                className="text-gray-400 hover:text-gray-600 mt-0.5 p-1 flex-shrink-0"
-              >
-                <ChevronDown size={16} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
-          </div>
 
-          {/* Admin action area */}
-          {needsAction && (
-            <div className="mt-3 space-y-2">
-              {item.action === 'scan_requested' && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf"
-                    className="hidden"
-                    onChange={(e) => setScanFiles(Array.from(e.target.files ?? []))}
-                  />
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
-                  >
-                    <Upload size={12} />
-                    {scanFiles.length ? `${scanFiles.length} file(s)` : 'Select Scans'}
-                  </button>
-                  {scanFiles.length > 0 && (
-                    <button
-                      onClick={handleScanUpload}
-                      disabled={uploading}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 text-green-700 hover:bg-green-100 border-green-200 disabled:opacity-60"
-                    >
-                      <Check size={12} />
-                      {uploading ? 'Uploading…' : 'Upload & Complete'}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {item.action === 'forward_requested' && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Tracking # (optional)"
-                    value={trackingNum}
-                    onChange={(e) => setTrackingNum(e.target.value)}
-                    className="border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
-                  />
-                  <button
-                    onClick={() => completeAction('forwarded', { tracking_number: trackingNum || undefined })}
-                    disabled={!!loading}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200 disabled:opacity-60"
-                  >
-                    <Send size={12} />
-                    {loading === 'forwarded' ? 'Marking…' : 'Mark Shipped'}
-                  </button>
-                </div>
-              )}
-
-              {isShredRequest && (
-                <div>
-                  {item.action === 'shred_after_scan_requested' && (
-                    <p className="text-xs text-orange-600 mb-1.5">Customer reviewed scan and requested shred</p>
-                  )}
-                  <button
-                    onClick={() => completeAction('shredded')}
-                    disabled={!!loading}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-red-50 text-red-700 hover:bg-red-100 border-red-200 disabled:opacity-60"
-                  >
-                    <Trash2 size={12} />
-                    {loading === 'shredded' ? 'Confirming…' : 'Confirm Shred'}
-                  </button>
-                </div>
-              )}
-
-              {item.action === 'keep_requested' && (
+            {/* View scans button for completed scan items */}
+            {hasScanFiles && (
+              <div className="mt-2">
                 <button
-                  onClick={() => completeAction('kept')}
-                  disabled={!!loading}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 text-green-700 hover:bg-green-100 border-green-200 disabled:opacity-60"
+                  onClick={() => setShowScans(true)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
                 >
-                  <Check size={12} />
-                  {loading === 'kept' ? 'Confirming…' : 'Confirm Keep'}
+                  <Eye size={12} /> View Scans ({item.scan_files!.length})
                 </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+              </div>
+            )}
 
-      {expanded && item.timeline && item.timeline.length > 0 && (
-        <div className="px-3 sm:px-4 pb-4 border-t border-gray-50">
-          <Timeline timeline={item.timeline} />
+            {/* Admin action area */}
+            {needsAction && (
+              <div className="mt-3 space-y-2">
+                {item.action === 'scan_requested' && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      multiple
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={(e) => setScanFiles(Array.from(e.target.files ?? []))}
+                    />
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
+                    >
+                      <Upload size={12} />
+                      {scanFiles.length ? `${scanFiles.length} file(s)` : 'Select Scans'}
+                    </button>
+                    {scanFiles.length > 0 && (
+                      <button
+                        onClick={handleScanUpload}
+                        disabled={uploading}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 text-green-700 hover:bg-green-100 border-green-200 disabled:opacity-60"
+                      >
+                        <Check size={12} />
+                        {uploading ? 'Uploading…' : 'Upload & Complete'}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {item.action === 'forward_requested' && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Tracking # (optional)"
+                      value={trackingNum}
+                      onChange={(e) => setTrackingNum(e.target.value)}
+                      className="border border-gray-300 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
+                    />
+                    <button
+                      onClick={() => completeAction('forwarded', { tracking_number: trackingNum || undefined })}
+                      disabled={!!loading}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200 disabled:opacity-60"
+                    >
+                      <Send size={12} />
+                      {loading === 'forwarded' ? 'Marking…' : 'Mark Shipped'}
+                    </button>
+                  </div>
+                )}
+
+                {isShredRequest && (
+                  <div>
+                    {item.action === 'shred_after_scan_requested' && (
+                      <p className="text-xs text-orange-600 mb-1.5">Customer reviewed scan and requested shred</p>
+                    )}
+                    <button
+                      onClick={() => completeAction('shredded')}
+                      disabled={!!loading}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-red-50 text-red-700 hover:bg-red-100 border-red-200 disabled:opacity-60"
+                    >
+                      <Trash2 size={12} />
+                      {loading === 'shredded' ? 'Confirming…' : 'Confirm Shred'}
+                    </button>
+                  </div>
+                )}
+
+                {item.action === 'keep_requested' && (
+                  <button
+                    onClick={() => completeAction('kept')}
+                    disabled={!!loading}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border bg-green-50 text-green-700 hover:bg-green-100 border-green-200 disabled:opacity-60"
+                  >
+                    <Check size={12} />
+                    {loading === 'kept' ? 'Confirming…' : 'Confirm Keep'}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      )}
-    </div>
+
+        {expanded && item.timeline && item.timeline.length > 0 && (
+          <div className="px-3 sm:px-4 pb-4 border-t border-gray-50">
+            <Timeline timeline={item.timeline} />
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -836,6 +867,39 @@ function EditCustomerModal({
         </div>
       </form>
     </Modal>
+  );
+}
+
+// ---- Image Lightbox ----
+
+function ImageLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <div className="relative max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-white/80 hover:text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink size={13} /> Open full size
+          </a>
+          <button onClick={onClose} className="text-white/80 hover:text-white p-1">
+            <X size={20} />
+          </button>
+        </div>
+        <img
+          src={url}
+          alt="Mail preview"
+          className="w-full max-h-[80vh] object-contain rounded-lg"
+        />
+      </div>
+    </div>
   );
 }
 

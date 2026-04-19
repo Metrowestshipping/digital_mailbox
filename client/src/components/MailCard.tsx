@@ -16,11 +16,23 @@ interface Props {
   isAdmin?: boolean;
 }
 
+interface PendingConfirm {
+  title: string;
+  description: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+}
+
 export function MailCard({ item, onUpdate, isAdmin }: Props) {
   const [loading, setLoading] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [showFiles, setShowFiles] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [pending, setPending] = useState<PendingConfirm | null>(null);
+
+  function confirm(opts: PendingConfirm) {
+    setPending(opts);
+  }
 
   async function handleAction(action: string) {
     setLoading(action);
@@ -52,6 +64,15 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
     <>
       {showFiles && item.scan_files && (
         <FileViewer files={item.scan_files} onClose={() => setShowFiles(false)} />
+      )}
+      {pending && (
+        <ConfirmDialog
+          title={pending.title}
+          description={pending.description}
+          destructive={pending.destructive}
+          onConfirm={() => { pending.onConfirm(); setPending(null); }}
+          onCancel={() => setPending(null)}
+        />
       )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
@@ -111,21 +132,34 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
                     <ActionButton
                       label="Keep"
                       icon={<CheckCircle size={13} />}
-                      onClick={() => handleAction('keep_requested')}
+                      onClick={() => confirm({
+                        title: 'Confirm: Keep',
+                        description: 'Your mail will be held at the store for pickup. No further action will be taken on this item.',
+                        onConfirm: () => handleAction('keep_requested'),
+                      })}
                       loading={loading === 'keep_requested'}
                       color="green"
                     />
                     <ActionButton
                       label="Open & Scan"
                       icon={<ScanLine size={13} />}
-                      onClick={() => handleAction('scan_requested')}
+                      onClick={() => confirm({
+                        title: 'Confirm: Open & Scan',
+                        description: 'We will open this mail item and scan the contents for you to view digitally. This action cannot be undone.',
+                        onConfirm: () => handleAction('scan_requested'),
+                      })}
                       loading={loading === 'scan_requested'}
                       color="blue"
                     />
                     <ActionButton
                       label="Shred"
                       icon={<Trash2 size={13} />}
-                      onClick={() => handleAction('shred_requested')}
+                      onClick={() => confirm({
+                        title: 'Confirm: Shred',
+                        description: 'This mail item will be permanently shredded and destroyed. This action is final and cannot be reversed or recovered.',
+                        destructive: true,
+                        onConfirm: () => handleAction('shred_requested'),
+                      })}
                       loading={loading === 'shred_requested'}
                       color="red"
                     />
@@ -151,14 +185,23 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
                     <ActionButton
                       label="Keep"
                       icon={<CheckCircle size={13} />}
-                      onClick={handleArchive}
+                      onClick={() => confirm({
+                        title: 'Confirm: Keep',
+                        description: 'The scanned document will be saved to your mailbox. The physical mail item will be held at the store for pickup.',
+                        onConfirm: handleArchive,
+                      })}
                       loading={loading === 'archive'}
                       color="green"
                     />
                     <ActionButton
                       label="Shred"
                       icon={<Trash2 size={13} />}
-                      onClick={() => handleAction('shred_after_scan_requested')}
+                      onClick={() => confirm({
+                        title: 'Confirm: Shred',
+                        description: 'The physical mail item will be permanently shredded and destroyed. This action is final and cannot be reversed or recovered.',
+                        destructive: true,
+                        onConfirm: () => handleAction('shred_after_scan_requested'),
+                      })}
                       loading={loading === 'shred_after_scan_requested'}
                       color="red"
                     />
@@ -184,7 +227,11 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
                   <ActionButton
                     label="Archive"
                     icon={<Archive size={13} />}
-                    onClick={handleArchive}
+                    onClick={() => confirm({
+                      title: 'Confirm: Archive',
+                      description: 'This item will be moved to your archive.',
+                      onConfirm: handleArchive,
+                    })}
                     loading={loading === 'archive'}
                     color="gray"
                   />
@@ -231,5 +278,45 @@ function ActionButton({
       {icon}
       {loading ? 'Loading…' : label}
     </button>
+  );
+}
+
+function ConfirmDialog({
+  title, description, destructive, onConfirm, onCancel,
+}: {
+  title: string;
+  description: string;
+  destructive?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <h3 className="text-base font-semibold text-gray-900 mb-2">{title}</h3>
+        <p className="text-sm text-gray-600 mb-5">{description}</p>
+        {destructive && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
+            This action is permanent and cannot be undone.
+          </p>
+        )}
+        <div className="flex gap-3 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${
+              destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          >
+            Yes, Confirm
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
