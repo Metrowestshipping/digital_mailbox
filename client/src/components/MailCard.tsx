@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import {
   ScanLine, Trash2, Archive, ChevronDown, ChevronUp,
-  Eye, Package, FileText, CheckCircle,
+  Eye, Package, FileText, CheckCircle, X, ExternalLink,
 } from 'lucide-react';
 import { mailApi } from '../lib/api';
 import type { MailItem } from '../lib/api';
@@ -29,6 +29,7 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
   const [showFiles, setShowFiles] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [pending, setPending] = useState<PendingConfirm | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   function confirm(opts: PendingConfirm) {
     setPending(opts);
@@ -62,6 +63,7 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
 
   return (
     <>
+      {previewUrl && <ImageLightbox url={previewUrl} onClose={() => setPreviewUrl(null)} />}
       {showFiles && item.scan_files && (
         <FileViewer files={item.scan_files} onClose={() => setShowFiles(false)} />
       )}
@@ -80,13 +82,21 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
           {/* Thumbnail */}
           <div className="flex-shrink-0 w-32 h-16 sm:w-48 sm:h-24 bg-gray-100 rounded-lg overflow-hidden">
             {!imgError ? (
-              <img
-                src={item.image_url}
-                alt="Mail"
-                className="w-full h-full object-cover cursor-pointer"
-                onClick={() => window.open(item.image_url, '_blank')}
-                onError={() => setImgError(true)}
-              />
+              <button
+                type="button"
+                onClick={() => setPreviewUrl(item.image_url)}
+                className="relative w-full h-full group focus:outline-none"
+              >
+                <img
+                  src={item.image_url}
+                  alt="Mail"
+                  className="w-full h-full object-cover"
+                  onError={() => setImgError(true)}
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                  <Eye size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
             ) : (
               <div className="w-full h-full flex items-center justify-center text-gray-400">
                 <FileText size={28} />
@@ -278,6 +288,37 @@ function ActionButton({
       {icon}
       {loading ? 'Loading…' : label}
     </button>
+  );
+}
+
+function ImageLightbox({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <div className="relative max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-white/80 hover:text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink size={13} /> Open full size
+          </a>
+          <button onClick={onClose} className="text-white/80 hover:text-white p-1">
+            <X size={20} />
+          </button>
+        </div>
+        <img
+          src={url}
+          alt="Mail preview"
+          className="w-full max-h-[80vh] object-contain rounded-lg"
+        />
+      </div>
+    </div>
   );
 }
 
