@@ -90,7 +90,7 @@ export function MailCard({ item, onUpdate, isAdmin }: Props) {
                 <img
                   src={item.image_url}
                   alt="Mail"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover pointer-events-none"
                   onError={() => setImgError(true)}
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">

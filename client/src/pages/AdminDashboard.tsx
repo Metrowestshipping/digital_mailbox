@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { format } from 'date-fns';
 import {
   LogOut, Mail, RefreshCw, Plus, Upload, Check, Trash2,
-  Send, ChevronDown, X, Images, Pencil, MessageSquare, Eye, ExternalLink,
+  Send, ChevronDown, X, Images, Pencil, MessageSquare, Eye, ExternalLink, Search,
 } from 'lucide-react';
 import { mailApi, uploadApi, usersApi } from '../lib/api';
 import { pdfToImage } from '../lib/pdfToImage';
@@ -301,7 +301,7 @@ function AdminMailRow({ item, onUpdate, onDelete }: { item: MailItem; onUpdate: 
             <img
               src={item.image_url}
               alt="Mail"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover pointer-events-none"
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
@@ -527,19 +527,7 @@ function BulkUploadModal({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Assign to Customer</label>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            required
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Select customer…</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.full_name} {c.box_number ? `(Box #${c.box_number})` : ''} — {c.email}
-              </option>
-            ))}
-          </select>
+          <CustomerPicker customers={customers} value={customerId} onChange={setCustomerId} />
         </div>
 
         <div>
@@ -628,6 +616,115 @@ function BulkUploadModal({
         </div>
       </form>
     </Modal>
+  );
+}
+
+// ---- Customer Picker (searchable dropdown) ----
+
+function customerLabel(c: Profile) {
+  return `${c.full_name}${c.box_number ? ` (Box #${c.box_number})` : ''} — ${c.email}`;
+}
+
+function CustomerPicker({ customers, value, onChange }: {
+  customers: Profile[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [highlight, setHighlight] = useState(0);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const selected = customers.find((c) => c.id === value);
+
+  // Match on name, email, or box number ("42" or "#42"); exact box number matches go first
+  const q = query.trim().toLowerCase().replace(/^#/, '');
+  const filtered = !q ? customers : customers
+    .filter((c) =>
+      c.full_name?.toLowerCase().includes(q) ||
+      c.email?.toLowerCase().includes(q) ||
+      c.box_number?.toLowerCase().includes(q)
+    )
+    .sort((a, b) => Number(b.box_number?.toLowerCase() === q) - Number(a.box_number?.toLowerCase() === q));
+
+  // Keep the highlighted row visible when moving with arrow keys
+  useEffect(() => {
+    if (!open) return;
+    const el = listRef.current?.children[highlight] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [highlight, open]);
+
+  function openList() {
+    if (open) return;
+    setOpen(true);
+    setHighlight(Math.max(customers.findIndex((c) => c.id === value), 0));
+  }
+
+  function select(c: Profile) {
+    onChange(c.id);
+    setQuery('');
+    setOpen(false);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!open) return openList();
+      setHighlight((h) => Math.min(h + 1, filtered.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault(); // don't submit the form from the picker
+      if (open && filtered[highlight]) select(filtered[highlight]);
+    } else if (e.key === 'Escape' && open) {
+      e.preventDefault();
+      setOpen(false);
+      setQuery('');
+    }
+  }
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+        <input
+          type="text"
+          value={open ? query : selected ? customerLabel(selected) : ''}
+          placeholder={selected ? customerLabel(selected) : 'Search name, box #, or email…'}
+          onChange={(e) => { setQuery(e.target.value); setHighlight(0); setOpen(true); }}
+          onFocus={openList}
+          onClick={openList}
+          onBlur={() => { setOpen(false); setQuery(''); }}
+          onKeyDown={handleKeyDown}
+          className="w-full border border-gray-300 rounded-lg pl-8 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+      </div>
+      {open && (
+        <ul
+          ref={listRef}
+          // Prevent the input from losing focus when clicking a row or dragging the scrollbar
+          onMouseDown={(e) => e.preventDefault()}
+          className="absolute z-20 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg py-1"
+        >
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-gray-400">No customers match "{query}"</li>
+          ) : filtered.map((c, i) => (
+            <li
+              key={c.id}
+              onClick={() => select(c)}
+              onMouseEnter={() => setHighlight(i)}
+              className={`px-3 py-2 text-sm cursor-pointer ${i === highlight ? 'bg-blue-50' : ''} ${c.id === value ? 'font-medium text-blue-700' : 'text-gray-800'}`}
+            >
+              {c.full_name}
+              {c.box_number && <span className="text-gray-500 font-normal"> · Box #{c.box_number}</span>}
+              <span className="block text-xs text-gray-400 font-normal truncate">{c.email}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
